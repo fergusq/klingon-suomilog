@@ -1,0 +1,127 @@
+.SENTENCE ::= .CLAUSE{!V9} -> $1
+.SENTENCE ::= .CONJ .CLAUSE{!V9} -> S(cc=$1, head=$2)
+
+.SENTENCE ::= .SENTENCE .ADV-CLAUSE{!V9} -> SS(head=$1, parataxis=$2)
+.SENTENCE ::= .SENTENCE , .CLAUSE{!V9} -> SS(head=$1, parataxis=$2)
+.SENTENCE ::= .SENTENCE .CLAUSE{!V9} -> SS(head=$1, parataxis=$2, weight=10)
+.SENTENCE ::= .SENTENCE-CHAIN , .CONJ .CLAUSE{!V9} -> SS(head=$1, conj=S(cc=$2, head=$3))
+.SENTENCE ::= .SENTENCE-CHAIN .CONJ .CLAUSE{!V9} -> SS(head=$1, conj=S(cc=$2, head=$3))
+
+.SENTENCE ::= .SENTENCE .CLAUSE{V9,!-meH,!-wI',!-ghach} -> SS(head=$1, conj=$2, weight=1)
+.SENTENCE ::= .SENTENCE , .CLAUSE{V9,!-meH,!-wI',!-ghach} -> SS(head=$1, conj=$2)
+.SENTENCE ::= .CLAUSE{V9,!-meH,!-wI',!-ghach} .SENTENCE -> SS(conj=$1, head=$2, weight=1)
+.SENTENCE ::= .CLAUSE{V9,!-meH,!-wI',!-ghach} , .SENTENCE -> SS(conj=$1, head=$2)
+
+.SENTENCE-CHAIN ::= .CLAUSE -> $1
+.SENTENCE-CHAIN ::= .CONJ .CLAUSE -> S(cc=$1, head=$2)
+.SENTENCE-CHAIN ::= .SENTENCE-CHAIN , .CONJ .CLAUSE -> SS(head=$1, conj=S(cc=$2, head=$3))
+.SENTENCE-CHAIN ::= .SENTENCE-CHAIN .CONJ .CLAUSE -> SS(head=$1, conj=S(cc=$2, head=$3))
+.SENTENCE-CHAIN ::= .SENTENCE-CHAIN , .CLAUSE -> SS(head=$1, conj=$2)
+
+.CLAUSE ::= .ADV-CLAUSE{$} -> $1
+.CLAUSE ::= .TIME-CLAUSE{$} -> $1
+.CLAUSE ::= .CLAUSE{$} ..{«jay'»} -> S(head=$1, advmod=ADV($2))
+.CLAUSE ::= .QUES .CLAUSE{$} -> S(advmod=$1, head=$2)
+.CLAUSE ::= .VP{$} -> $1
+.CLAUSE ::= .VP{$} .VERB{neH:v,Obj3} -> VP(ccomp=$1, head=$2)
+.CLAUSE ::= .VP{$} .VERB{neH:v,Obj3} .NP{!-Daq,!-vo',!-vaD,!-mo'} -> VP(ccomp=$1, head=$2, nsubj=$3)
+
+.CLAUSE ::= .COMPARE{$} -> $1
+
+.ADV-CLAUSE ::= .ADVP .CLAUSE{$} -> S(advmod=$1, head=$2)
+.ADV-CLAUSE ::= .OBLP .CLAUSE{$} -> S(obl=$1, head=$2)
+
+.TIME-CLAUSE ::= .TIMEP .CLAUSE{$} -> S(obl=$1, head=$2, weight=0)
+.TIME-CLAUSE ::= .TIMEP .ADV-CLAUSE{$} -> S(obl=$1, head=$2, weight=0)
+
+.VP ::= .VERB{$,!-bogh} -> VP(head=$1)
+.VP ::= .OBJP{!-Daq,!-vo',!-vaD,!-mo'} .OBJ-VERB{$} -> VP($1, head=$2)
+.VP ::= .VERB{$,Subj3,!-bogh} .NP{!-Daq,!-vo',!-vaD,!-mo'} -> VP(head=$1, nsubj=$2)
+.VP ::= .OBJP{!-Daq,!-vo',!-vaD,!-mo'} .OBJ-VERB{$,Subj3} .NP{!-Daq,!-vo',!-vaD,!-mo'} -> VP($1, head=$2, nsubj=$3)
+
+.VP ::= .TO-BE -> $1
+.VP ::= .TO-BE .NP{-'e'} -> VP(head=$1, nsubj=$2)
+.VP ::= .NP{!-Daq,!-vo',!-vaD,!-mo'} .TO-BE -> COP(head=$1, cop=$2)
+.VP ::= .NP{!-Daq,!-vo',!-vaD,!-mo'} .TO-BE .NP{-'e'} -> COP(head=$1, cop=$2, nsubj=$3)
+
+.VP ::= .CLAUSE{!V9} ..{«net»} .VERB{$,!-bogh,Obj3,Subj3} -> VP(ccomp=$1, mark=$2, head=$3)
+
+.COMPARE ::= .NP{!N5} .VERB{VS,!V9} ..{$,law':v,!V1,!V4,!V7,!V9} .NP{!N5} .VERB{VS,!V9} ..{puS:v,!V1,!V4,!V7,!V9} -> VP(nsubj=$1,head=$2,advmod=$3,advcl=VP(nsubj=$4,head=$5,advmod=$6))
+
+.ADVP ::= ..{ADV,!«je»,!«neH»,!«jay'»} -> ADV($1)
+.ADVP ::= ..{«pa'»} -> PLACE(NOUN($1))
+.ADVP ::= ..{«naDev»} -> PLACE(NOUN($1))
+.ADVP ::= ..{«vogh»} -> PLACE(NOUN($1))
+.ADVP ::= ..{«Dat»} -> PLACE(NOUN($1))
+
+.OBLP ::= .NP{-'e'} -> TOPIC($1)
+.OBLP ::= .NP{-Daq} -> PLACE($1)
+.OBLP ::= .NP{-vo'} -> FROM($1)
+.OBLP ::= .NP{-vaD} -> FOR($1)
+.OBLP ::= .NP{-mo'} -> CAUSE($1)
+
+.TIMEP ::= .NP{rep:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{tup:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{lup:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{jaj:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{DaHjaj:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{pem:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{ram:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{Hogh:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{jar:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{DIS:n,!N5} -> TIME($1)
+.TIMEP ::= .NP{poH:n,!N5} -> TIME($1)
+
+.OBJP ::= .NP{$} -> obj=$1
+.OBJP ::= .CLAUSE{!V9} ..{«'e'»} -> ccomp=$1, mark=$2
+.OBJP ::= .CLAUSE{!V9} .ADVP ..{«'e'»} -> ccomp=$1, advmod=$2, mark=$3
+.OBJP ::= .CLAUSE{!V9} .OBLP ..{«'e'»} -> ccomp=$1, obl=$2, mark=$3
+
+.NP ::= .CLAUSE{-meH} .NP-NO-PURPOSE{$} -> NP(acl=$1, head=$2)
+.NP ::= .NP-NO-PURPOSE{$} -> $1
+
+.NP-NO-PURPOSE ::= .NP-NO-PURPOSE{!N5} .NOUN{$,!PRON} -> NP(nmod=$1, head=$2)
+.NP-NO-PURPOSE ::= .NP-NO-PURPOSE{!N5,!VS} .ADJ{$} -> NP(head=$1, amod=$2)
+.NP-NO-PURPOSE ::= .NP-NO-PURPOSE{$} ..{«neH»} -> NP(head=$1, advmod=ADV($2))
+.NP-NO-PURPOSE ::= .NP-NO-PURPOSE{!N5,!VS} .ADJ{$} ..{«neH»} -> NP(head=$1, amod=$2, advmod=ADV($3))
+.NP-NO-PURPOSE ::= .NOUN{$} -> $1
+
+.NP ::= .NP{$} .VERB{!VS,Obj3,-bogh} -> RELP(head=$1,acl=$2)
+.NP ::= .VERB{Subj3,-bogh} .NP{$} -> RELP(acl=$1,head=$2)
+.NP ::= .OBJP{!N5} .VERB{!VS,Obj3,Subj3,-bogh} .NP{$} -> RELP(acl=VP($1, head=$2), head=$3)
+.NP ::= .NP{$} .VERB{!VS,Obj3,Subj3,-bogh} .NP{!N5} -> RELP(head=$1, acl=VP(head=$2,nsubj=$3))
+
+.NP ::= .NOUN{$} .NOUN{$} .NCONJ -> NP(head=$1, conj=$2, cc=$3, weight=1)
+.NP ::= .NP{$} , .NP{$} .NCONJ -> NP(head=$1, conj=$2, cc=$3)
+.NP ::= .NP{$} , .NP{$} , .NP{$} .NCONJ -> NP(head=$1, conj=$2, conj2=$3, cc=$4)
+.NP ::= .NP{$} , .NP{$} , .NP{$} , .NP{$} .NCONJ -> NP(head=$1, conj=$2, conj2=$3, conj3=$4, cc=$5)
+.NP ::= .NP{$} .NP{$} .NCONJ -> NP(head=$1, conj=$2, cc=$3, weight=10)
+.NP ::= .NP{$} .NP{$} .NP{$} .NCONJ -> NP(head=$1, conj=$2, conj2=$3, cc=$4, weight=10)
+.NP ::= .NP{$} .NP{$} .NP{$} .NP{$} .NCONJ -> NP(head=$1, conj=$2, conj2=$3, conj3=$4, cc=$5, weight=10)
+
+.NOUN ::= ..{NP,$,!«net»,!«'e'»} -> NOUN($1)
+
+.ADJ ::= ..{VS,!V1,!V2,!V3,!V4,!V5,!V6,!V7,!V8,!V9,$} -> VERB($1)
+
+.VERB ::= ..{VP,$} -> VERB($1)
+.VERB ::= ..{VP,$} ..{«neH»} -> ONLYP(head=$1, advmod=ADV($2))
+.VERB ::= ..{VP,$} ..{«je»} -> ALSOP(head=$1, advmod=ADV($2))
+
+.TO-BE ::= .PRON{!N1,!N2,!N3,!N4,!N5,$} -> COPULA($1)
+
+.OBJ-VERB ::= .VERB{$,!VS,!-bogh,!jI-,!bI-,!ma-,!Su-} -> $1
+.OBJ-VERB ::= .VERB{$,VS,-moH,!-bogh,!jI-,!bI-,!ma-,!Su-} -> $1
+
+.PRON ::= ..{PRON,!«net»,!«'e'»,$} -> NOUN($1)
+
+.CONJ ::= ..{«'ej»} -> CONJ($1)
+.CONJ ::= ..{«qoj»} -> CONJ($1)
+.CONJ ::= ..{«pagh»} -> CONJ($1)
+.CONJ ::= ..{«'ach»} -> CONJ($1)
+.CONJ ::= ..{«'a»} -> CONJ($1)
+
+.NCONJ ::= ..{«je»} -> CONJ($1)
+.NCONJ ::= ..{«joq»} -> CONJ($1)
+.NCONJ ::= ..{«ghap»} -> CONJ($1)
+
+.QUES ::= ..{QUES,$} -> QUES($1)
