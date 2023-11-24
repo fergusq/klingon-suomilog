@@ -3,26 +3,28 @@ import pprint
 import readline
 from pathlib import Path
 import traceback
-from typing import DefaultDict, Dict, List, NamedTuple, Set, Tuple, Union
+from typing import NamedTuple, Union
 
 import suomilog.patternparser as pp
 from suomilog.cykparser import CYKParser
 import yajwiz
 
-def match_bits(tbits: Set[str], bits: Set[str]):
+import glosser
+
+def match_bits(tbits: set[str], bits: set[str]):
 	positive_bits = {bit for bit in bits if not bit.startswith("!")}
 	negative_bits = {bit[1:] for bit in bits if bit.startswith("!")}
 	return tbits >= positive_bits and not (tbits & negative_bits)
 
 class MyToken(pp.Token):
-	def __init__(self, token: str, alternatives: List[Tuple[str, Set[str]]], position: int, analyses: List[yajwiz.analyzer.Analysis]):
+	def __init__(self, token: str, alternatives: list[tuple[str, set[str]]], position: int, analyses: list[yajwiz.analyzer.Analysis]):
 		super().__init__(token, alternatives)
 		self.position = position
 		self.analyses = analyses
 	def containsMatch(self, alternatives):
 		return any([any([tbf == baseform and match_bits(tbits, bits) for tbf, tbits in self.alternatives]) for baseform, bits in alternatives])
 
-def tokenize(line) -> List[MyToken]:
+def tokenize(line) -> list[MyToken]:
 	ans = []
 	i = 0
 	for token_type, token_text in yajwiz.tokenize(line):
@@ -34,6 +36,7 @@ def tokenize(line) -> List[MyToken]:
 				alternatives.append((analysis["LEMMA"], bits))
 			
 			if not analyses:
+				# Simple guesser
 				if len(token_text) > 3 and token_text.endswith("vaD"):
 					alternatives.append((token_text[:-3], {f"«{token_text}»", token_text[:-3], "N", "NP", "-vaD", "-vaD:n", "N5"}))
 				
@@ -66,7 +69,7 @@ def tokenize(line) -> List[MyToken]:
 grammar = pp.Grammar()
 
 class WordPattern:
-	def __init__(self, bits: Set[str] = set()):
+	def __init__(self, bits: set[str] = set()):
 		self.bits = set() | bits
 	def __repr__(self):
 		return f"WordPattern({repr(self.bits)})"
@@ -143,10 +146,10 @@ class node(NamedTuple):
 	def getPosition(self) -> int:
 		return self.position
 	
-	def getRelations(self) -> Dict[int, Tuple[int, str]]:
+	def getRelations(self) -> dict[int, tuple[int, str]]:
 		return {}
 	
-	def getInverseRelations(self) -> Dict[int, Dict[str, Set[int]]]:
+	def getInverseRelations(self) -> dict[int, dict[str, set[int]]]:
 		return {}
 	
 	def getPartsOfSpeech(self):
@@ -154,18 +157,23 @@ class node(NamedTuple):
 	
 	def getWeight(self):
 		return 0
+	
+	def getTextLength(self):
+		return len(self.text) + 2
 
 class branch:
-	attrs: Dict[str, tree]
+	name: str
+	attrs: dict[str, tree]
 	weight: float
-	def __init__(self, weight=0, **x):
+	def __init__(self, name="", weight=0, **x):
+		self.name = name
 		self.attrs = x
 		self.weight = weight
 	
 	def getPosition(self) -> int:
 		return self.attrs["head"].getPosition()
 	
-	def getRelations(self) -> Dict[int, Tuple[int, str]]:
+	def getRelations(self) -> dict[int, tuple[int, str]]:
 		relations = self.attrs["head"].getRelations()
 		position = self.getPosition()
 		for key, val in self.attrs.items():
@@ -175,7 +183,7 @@ class branch:
 		
 		return relations
 	
-	def getInverseRelations(self) -> Dict[int, Dict[str, Set[int]]]:
+	def getInverseRelations(self) -> dict[int, dict[str, set[int]]]:
 		ans = defaultdict(lambda: defaultdict(set))
 		for a, (b, rel) in self.getRelations().items():
 			ans[b][rel].add(a)
@@ -195,9 +203,23 @@ class branch:
 			w += val.getWeight()
 		
 		return w
+	
+	def getTextLength(self):
+		return sum(val.getTextLength() for val in self.attrs.values())
+	
+	def __repr__(self):
+		return f"branch({self.name}, {self.weight}, **{self.attrs})"
+	
+	@staticmethod
+	def with_name(name):
+		return lambda **x: branch(name=name, **x)
 
-def validateInverseRelations(invrels: Dict[int, Dict[str, Set[int]]]) -> bool:
+def validateInverseRelations(t: tree) -> bool:
+	invrels: dict[int, dict[str, set[int]]]
+	invrels = t.getInverseRelations()
 	for position, relations in invrels.items():
+		# Check that there are no adverbial elements before a clausal complement
+		# I.e. DaH jIDoy' 'e' vItlhoj cannot be interpreted as "Now I realized that I am tired", only as "I realize that I am tired now"
 		if "ccomp" in relations and "advmod" in relations and any(n < list(relations["ccomp"])[0] for n in relations["advmod"]):
 			return False
 		if "ccomp" in relations and "obl" in relations and any(n < list(relations["ccomp"])[0] for n in relations["obl"]):
@@ -213,6 +235,7 @@ CONSTITUENT_CLASSES = {
 	"CONJ": set_pos("CONJ"),
 	"ADV": set_pos("ADV"),
 	"QUES": set_pos("QUES"),
+	"EXCL": set_pos("EXCL"),
 
 	"CAUSE": identity,
 	"COPULA": identity,
@@ -222,87 +245,150 @@ CONSTITUENT_CLASSES = {
 	"PLACE": identity,
 	"TIME": identity,
 
-	"ALSOP": branch,
-	"ONLYP": branch,
-	"COP": branch,
-	"RELP": branch,
-	"SS": branch,
-	"NP": branch,
-	"S": branch,
-	"VP": branch,
+	"ALSOP": branch.with_name("ALSOP"),
+	"ONLYP": branch.with_name("ONLYP"),
+	"COP": branch.with_name("COP"),
+	"RELP": branch.with_name("RELP"),
+	"SS": branch.with_name("SS"),
+	"NP": branch.with_name("NP"),
+	"S": branch.with_name("S"),
+	"VP": branch.with_name("VP"),
 }
 
-while True:
-	try:
-		line = input(">> ").strip()
-	except EOFError:
-		print()
-		break
-	if not line:
-		continue
-	elif line[0] == ".":
-		line = line.replace("\t", " ")
-		tokens = line.split(" ")
-		if len(tokens) == 1 and tokens[0][1:] in grammar.patterns:
-			print(grammar.patterns[tokens[0][1:]])
-		elif len(tokens) > 2 and tokens[1] == "::=" and "->" in tokens:
-			grammar.parseGrammarLine(line)
+def printConstituencyTree(t: tree):
+	queue = []  # (node, parent, is_last)
+	queue.append((t, "ROOT", True))
+	while queue:
+		t, parent, is_last = queue.pop(0)
+		if isinstance(t, str):
+			print(" " + t + " ", end="")
+			queue.append((" "*len(t), parent, is_last))
+
 		else:
-			print("Kategoriat:")
-			for cat in grammar.patterns:
-				print(cat)
-	elif line.startswith("/eval "):
-		try:
-			print(eval(line[len("/eval "):]))
-		except:
-			traceback.print_exc()
-	elif line == "/cyk_table":
-		pprint.pprint(analysis.cyk_table)
-		print("<table>")
-		for span in range(len(tokens), 0, -1):
-			print("<tr>", end="")
-			for start in range(0, len(tokens)-span+1):
-				end = start+span
-				print(f"<td>{repr(analysis.cyk_table[(start, end)])}", end="")
+			width = t.getTextLength()
+			if isinstance(t, node):
+				print(" " + t.text + " ", end="")
+				queue.append((t.pos + " "*(width-len(t.pos)-2), t.text, is_last))
 			
+			else:
+				children = list(t.attrs.keys())
+				if len(children) == 1 and isinstance(children[0], branch) and children[0].name == parent:
+					queue.append((t.attrs[children[0]], parent, is_last))
+					continue
+
+				print(" " + t.name + "-"*(width - len(t.name) - 2) + " ", end="")
+				for i, child in enumerate(children):
+					queue.append((t.attrs[child], child, is_last and i == len(children)-1))
+		
+		if is_last:
 			print()
 		
-		print("<tr>", end="")
-		for t in tokens:
-			print(f"<th>{t.token}", end="")
-		
-		print()
-		print("</table>")
-	elif line == "/säännöt":
-		cyk_parser.print()
-	elif line == "/hakasulut":
-		brackets = not brackets
-	else:
-		tokens = tokenize(line)
-		print(tokens)
-		analysis = cyk_parser.parse(tokens)
-		#pprint.pprint(cyk_table)
-		#pprint.pprint(split_table)
-		outputs = analysis.getOutput(".SENTENCE{}")
-		if not outputs:
+		if all(isinstance(x, str) and x.strip() == "" for x, _, _ in queue):
+			print()
+			break
+
+
+def parse(tokens: list[MyToken]) -> list[tree]:
+	analysis = cyk_parser.parse(tokens)
+	outputs = analysis.getOutput(".SENTENCE{}")
+	if not outputs:
+		return []
+
+	dep_trees = []
+	for output in outputs:
+		dep_tree: tree = eval(output.strip(), CONSTITUENT_CLASSES)
+		if not validateInverseRelations(dep_tree):
 			continue
-		for output in outputs:
-			print(output)
-			dep_tree: tree = eval(output.strip(), CONSTITUENT_CLASSES)
-			if not validateInverseRelations(dep_tree.getInverseRelations()):
-				continue
-			weight = dep_tree.getWeight()
-			relations = dep_tree.getRelations()
-			poses = dep_tree.getPartsOfSpeech()
-			root_position = dep_tree.getPosition()
-			print("WEIGHT:", weight)
-			for token in tokens:
-				head, rel = relations.get(token.position, (-1, "unk") if token.position != root_position else (-1, "root"))
-				print(token.position, token.token, poses.get(token.position, "UNK"), head, rel, sep="\t")
-			print("digraph G {")
-			for token in tokens:
-				print(f"   n{token.position} [label=\"{token.token}\"];")
-			print(f"   n{dep_tree.getPosition()} -> ROOT [label=\"root\"];")
-			for a, (b, rel) in relations.items():
-				print(f"   n{a} -> n{b} [label=\"{rel}\"];")
-			print("}")
+		dep_trees.append(dep_tree)
+	
+	dep_trees.sort(key=lambda x: x.getWeight())
+	return dep_trees
+
+class DependencyTreeNode(NamedTuple):
+	position: int
+	pos: str
+	token: MyToken
+	children: dict[str, list["DependencyTreeNode"]]
+
+	@staticmethod
+	def fromTree(tokens: list[MyToken], tree: tree) -> "DependencyTreeNode":
+		relations = dep_tree.getRelations()
+		poses = dep_tree.getPartsOfSpeech()
+		root_position = dep_tree.getPosition()
+
+		nodes: dict[int, DependencyTreeNode] = {}
+		for token in tokens:
+			nodes[token.position] = DependencyTreeNode(token.position, poses.get(token.position, "UNK"), token, {})
+		
+		for a, (b, rel) in relations.items():
+			nodes[b].children.setdefault(rel, []).append(nodes[a])
+		
+		return nodes[root_position]
+
+if __name__ == "__main__":
+	while True:
+		try:
+			line = input(">> ").strip()
+		except EOFError:
+			print()
+			break
+		if not line:
+			continue
+		elif line[0] == ".":
+			line = line.replace("\t", " ")
+			tokens = line.split(" ")
+			if len(tokens) == 1 and tokens[0][1:] in grammar.patterns:
+				print(grammar.patterns[tokens[0][1:]])
+			elif len(tokens) > 2 and tokens[1] == "::=" and "->" in tokens:
+				grammar.parseGrammarLine(line)
+			else:
+				print("Kategoriat:")
+				for cat in grammar.patterns:
+					print(cat)
+		elif line.startswith("/eval "):
+			try:
+				print(eval(line[len("/eval "):]))
+			except:
+				traceback.print_exc()
+		# elif line == "/cyk_table":
+		# 	pprint.pprint(analysis.cyk_table)
+		# 	print("<table>")
+		# 	for span in range(len(tokens), 0, -1):
+		# 		print("<tr>", end="")
+		# 		for start in range(0, len(tokens)-span+1):
+		# 			end = start+span
+		# 			print(f"<td>{repr(analysis.cyk_table[(start, end)])}", end="")
+				
+		# 		print()
+			
+		# 	print("<tr>", end="")
+		# 	for t in tokens:
+		# 		print(f"<th>{t.token}", end="")
+			
+		# 	print()s
+		# 	print("</table>")
+		elif line == "/säännöt":
+			cyk_parser.print()
+		else:
+			tokens = tokenize(line)
+			print(tokens)
+			dep_trees = parse(tokens)
+			for dep_tree in dep_trees:
+				print(repr(dep_tree))
+				printConstituencyTree(dep_tree)
+				weight = dep_tree.getWeight()
+				relations = dep_tree.getRelations()
+				poses = dep_tree.getPartsOfSpeech()
+				root_position = dep_tree.getPosition()
+				print("WEIGHT:", weight)
+				for token in tokens:
+					head, rel = relations.get(token.position, (-1, "unk") if token.position != root_position else (-1, "root"))
+					pos = poses.get(token.position, "UNK")
+					print(token.position, token.token, pos, head, rel, glosser.gloss(token.token, pos, token.analyses), sep="\t")
+				print("digraph G {")
+				for token in tokens:
+					print(f"   n{token.position} [label=\"{token.token}\"];")
+				print(f"   n{dep_tree.getPosition()} -> ROOT [label=\"root\"];")
+				for a, (b, rel) in relations.items():
+					print(f"   n{a} -> n{b} [label=\"{rel}\"];")
+				print("}")
