@@ -119,10 +119,15 @@
 .NP-NO-PURPOSE ::= .NP-NO-PURPOSE{!N5,!VS} .ADJ{$} ..{«neH»} -> NP(head=$1, amod=$2, advmod=ADV($3))
 .NP-NO-PURPOSE ::= .NOUN{$} -> $1
 
-.NP ::= .NP{$} .VERB{!VS,Obj3,-bogh} -> RELP(head=$1,acl=$2)
-.NP ::= .VERB{Subj3,-bogh} .NP{$} -> RELP(acl=$1,head=$2)
-.NP ::= .OBJP{!N5} .VERB{Obj3,Subj3,-bogh} .NP{$} -> RELP(acl=VP($1, head=$2), head=$3)
-.NP ::= .NP{$} .VERB{Obj3,Subj3,-bogh} .NP{!N5} -> RELP(head=$1, acl=VP(head=$2,nsubj=$3))
+.NP-REL ::= .NP{$} .VERB{!VS,Obj3,-bogh} -> RELP(head=$1,acl=$2)
+.NP-REL ::= .VERB{Subj3,-bogh} .NP{$} -> RELP(acl=$1,head=$2)
+.NP-REL ::= .OBJP{!N5} .VERB{Obj3,Subj3,-bogh} .NP{$} -> RELP(acl=VP($1, head=$2), head=$3)
+.NP-REL ::= .NP{$} .VERB{Obj3,Subj3,-bogh} .NP{!N5} -> RELP(head=$1, acl=VP(head=$2,nsubj=$3))
+
+.NP ::= .NP-REL{$} -> $1
+.NP ::= .ADVP .NP-REL{$} -> NP(head=$2, advmod=$1)
+.NP ::= .OBLP .NP-REL{$} -> NP(head=$2, obl=$1)
+.NP ::= .TIMEP .NP-REL{$} -> NP(head=$2, obl=$1)
 
 .NP ::= .NOUN{$} .NOUN{$} .NCONJ -> NP(head=$1, conj=NP(head=$2, cc=$3), weight=1)
 .NP ::= .NP{$} , .NP{$} .NCONJ -> NP(head=$1, conj=NP(head=$2, cc=$3))
