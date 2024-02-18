@@ -1,0 +1,4 @@
+suomilog==0.10
+yajwiz==0.10.4
+inflex
+regex
